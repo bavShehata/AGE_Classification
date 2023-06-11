@@ -11,6 +11,12 @@ if __name__ == '__main__':
 #     return f"Hello, {escape(name)}!"  
 @app.route("/predict/<path:img_path>")
 def hello_world(img_path):
+    data = request.json
+    print(data.get('name'))
+    print(data.get('age'))
+    return data
+    data = json.loads(request.data)
+    return data
     return f"Hello, {escape(img_path)}!"
 
 # @app.post("/predict/<path:img_path>")
