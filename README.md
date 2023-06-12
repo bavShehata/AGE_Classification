@@ -7,7 +7,7 @@ AGE classification (Age, Gender, and Ethnicity) is my graduation deep learning p
 To run the backend app,
 
 ```
-pip install -r requirements
+pip install -r requirements.txt
 ```
 
 ```
