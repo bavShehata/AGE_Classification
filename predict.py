@@ -261,16 +261,17 @@ def get_prediction(imgs_to_predict = [], determinism = True):
         _, preds_tensor = torch.max(output, 0)
         pred_idx = preds_tensor.cpu()
         pred_prob = F.softmax(output, dim=0)[pred_idx]*100
+        pred_prob_text = f"{pred_prob:.1f}"
         pred = CLASS_RANGES[pred_idx]
         pred_label = f"{pred_indicator}: {pred} {pred_prob:.1f}%"
         print(f"Predicted output: {pred_label}")
         if CLASS_AGE:
           pred_dict['a']['label'] = pred
-          pred_dict['a']['prob'] = pred_prob
+          pred_dict['a']['prob'] = pred_prob_text
         elif CLASS_GENDER:
           pred_dict['g']['label'] = pred
-          pred_dict['g']['prob'] = pred_prob
+          pred_dict['g']['prob'] = pred_prob_text
         elif CLASS_ETHNICITY:
           pred_dict['e']['label'] = pred
-          pred_dict['e']['prob'] = pred_prob
+          pred_dict['e']['prob'] = pred_prob_text
   return pred_dict
