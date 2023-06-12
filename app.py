@@ -1,6 +1,7 @@
 from flask import Flask, request
 from markupsafe import escape
 import os
+from predict import get_prediction
 
 app = Flask(__name__)
 port = int(os.environ.get('PORT', 5000))
@@ -11,13 +12,8 @@ if __name__ == '__main__':
 #     return f"Hello, {escape(name)}!"  
 @app.route("/predict/<path:img_path>")
 def hello_world(img_path):
-    data = request.json
-    print(data.get('name'))
-    print(data.get('age'))
-    return data
-    data = json.loads(request.data)
-    return data
-    return f"Hello, {escape(img_path)}!"
+    res = get_prediction([img_path])
+    return f"Hello, {escape(img_path)}\n {res}"
 
 # @app.post("/predict/<path:img_path>")
 # def hello_world(name):

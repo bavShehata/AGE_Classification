@@ -32,13 +32,12 @@ import requests
 """###Data module"""
 
 class FacesDataset(Dataset):
-  def __init__(self, X, y, transform=None, batch_size=64):
+  def __init__(self, X, y, transform=None):
     self.transform = transform
     self.X=X
     self.y=y
     if not y:
       self.y = np.full([len(X['img_idx'])], -1)
-    self.batch_size = batch_size
 
   def __len__(self):
     return (len(self.X['img_idx']))
@@ -49,7 +48,13 @@ class FacesDataset(Dataset):
     else:
       img_idx = self.X['img_idx'][i]
     # get labels from df
-    image = read_image(img_idx)
+    random_bits = random.getrandbits(128)
+    temp_img_name = str("%032x" % random_bits) + '.jpg'
+    f = open(temp_img_name,'wb')
+    f.write(requests.get(img_idx).content)
+    f.close()
+    image = read_image(temp_img_name)
+    os.remove(temp_img_name)
     age_label = torch.tensor(self.X['age_label'][i], dtype=torch.long)
     exact_age = torch.tensor(self.X['age'][i], dtype=torch.long)
     gender_label = torch.tensor(self.X['gender_label'][i], dtype=torch.long)
@@ -66,8 +71,9 @@ class FacesDataset(Dataset):
 
             
 class FacesDataModule(pl.LightningDataModule):
-  def __init__(self, pred_images=None, weighted_sampler=True):
+  def __init__(self, pred_images=None, weighted_sampler=True, batch_size = 64):
     super().__init__()
+    self.batch_size = batch_size
     self.val_transform = A.Compose(
       [
         A.ToFloat(max_value=255, always_apply=True),
@@ -99,81 +105,78 @@ class FacesDataModule(pl.LightningDataModule):
 
 """###Model module"""
 
-if __name__ == '__main__':
-  print("Setting up the model")
-  download_data()
-  # Create the base model and its functions
-  class BaseModel(pl.LightningModule):
-    def __init__(self, learning_rate=None):
-      super().__init__()
-      #initialize variables
-      self.bn_init = nn.BatchNorm2d(3)
-      self.predict_step_outputs = []
+# Create the base model and its functions
+class BaseModel(pl.LightningModule):
+  def __init__(self, learning_rate=None):
+    super().__init__()
+    #initialize variables
+    self.bn_init = nn.BatchNorm2d(3)
+    self.predict_step_outputs = []
 
-    def forward(self,x):
-      # normalization
-      return self.bn_init(x)
-        
-    def predict_step(self, batch, batch_idx):
-      images = batch['image']
-      num_of_imgs = images.size()[0]
-      preds = self(images)
-      return preds, images[:num_of_imgs]
+  def forward(self,x):
+    # normalization
+    return self.bn_init(x)
+      
+  def predict_step(self, batch, batch_idx):
+    images = batch['image']
+    num_of_imgs = images.size()[0]
+    preds = self(images)
+    return preds, images[:num_of_imgs]
 
-  #3 basics cnv model that adapts to number of layers
-  class Basic_cnv(BaseModel):
-    def __init__(self, num_of_layers, base_features, hidden_neurons, CLASSES):
-      super().__init__()
-      self.bn1 = nn.BatchNorm2d(base_features)
-      self.bn2 = nn.BatchNorm2d(base_features*2)
-      self.bn3 = nn.BatchNorm2d(base_features*4)
-      self.bn4 = nn.BatchNorm2d(base_features*8)
-      self.bn5 = nn.BatchNorm2d(base_features*16)
-      self.doi = nn.Dropout(0.1)
-      self.do1 = nn.Dropout(0.1)
-      self.do2 = nn.Dropout(0.1)
-      self.do3 = nn.Dropout(0.1)
-      self.do4 = nn.Dropout(0.1)
-      self.do5 = nn.Dropout(0.1)
-      self.doo = nn.Dropout(0.6)
-      self.cnv1 = nn.Conv2d(3, base_features, kernel_size = 3, padding = 1)
-      self.cnv2 = nn.Conv2d(base_features, base_features*2, kernel_size = 3, padding = 1)
-      self.cnv3 = nn.Conv2d(base_features*2, base_features*4, kernel_size = 3, padding = 1)
-      self.cnv4 = nn.Conv2d(base_features*4, base_features*8, kernel_size = 3, padding = 1)
-      self.cnv5 = nn.Conv2d(base_features*8, base_features*16, kernel_size = 3, padding = 1)
-      self.rel1 = nn.ReLU()
-      self.rel2 = nn.ReLU()
-      self.rel3 = nn.ReLU()
-      self.rel4 = nn.ReLU()
-      self.rel5 = nn.ReLU()
-      self.relo = nn.ReLU()
-      self.max1 = nn.MaxPool2d(2, 2)
-      self.max2 = nn.MaxPool2d(2, 2)
-      self.max3 = nn.MaxPool2d(2, 2)
-      self.max4 = nn.MaxPool2d(2, 2)
-      self.max5 = nn.MaxPool2d(2, 2)
-      self.flat = nn.Flatten()
-      num_of_features = int(224/(2**num_of_layers))
-      num_of_features *= num_of_features
-      num_of_features *= base_features * (2**(num_of_layers-1))
-      self.fc1 = nn.Linear(num_of_features, hidden_neurons)
-      self.fc2 = nn.Linear(hidden_neurons, CLASSES)
+#3 basics cnv model that adapts to number of layers
+class Basic_cnv(BaseModel):
+  def __init__(self, num_of_layers, base_features, hidden_neurons, CLASSES):
+    super().__init__()
+    self.bn1 = nn.BatchNorm2d(base_features)
+    self.bn2 = nn.BatchNorm2d(base_features*2)
+    self.bn3 = nn.BatchNorm2d(base_features*4)
+    self.bn4 = nn.BatchNorm2d(base_features*8)
+    self.bn5 = nn.BatchNorm2d(base_features*16)
+    self.doi = nn.Dropout(0.1)
+    self.do1 = nn.Dropout(0.1)
+    self.do2 = nn.Dropout(0.1)
+    self.do3 = nn.Dropout(0.1)
+    self.do4 = nn.Dropout(0.1)
+    self.do5 = nn.Dropout(0.1)
+    self.doo = nn.Dropout(0.6)
+    self.cnv1 = nn.Conv2d(3, base_features, kernel_size = 3, padding = 1)
+    self.cnv2 = nn.Conv2d(base_features, base_features*2, kernel_size = 3, padding = 1)
+    self.cnv3 = nn.Conv2d(base_features*2, base_features*4, kernel_size = 3, padding = 1)
+    self.cnv4 = nn.Conv2d(base_features*4, base_features*8, kernel_size = 3, padding = 1)
+    self.cnv5 = nn.Conv2d(base_features*8, base_features*16, kernel_size = 3, padding = 1)
+    self.rel1 = nn.ReLU()
+    self.rel2 = nn.ReLU()
+    self.rel3 = nn.ReLU()
+    self.rel4 = nn.ReLU()
+    self.rel5 = nn.ReLU()
+    self.relo = nn.ReLU()
+    self.max1 = nn.MaxPool2d(2, 2)
+    self.max2 = nn.MaxPool2d(2, 2)
+    self.max3 = nn.MaxPool2d(2, 2)
+    self.max4 = nn.MaxPool2d(2, 2)
+    self.max5 = nn.MaxPool2d(2, 2)
+    self.flat = nn.Flatten()
+    num_of_features = int(224/(2**num_of_layers))
+    num_of_features *= num_of_features
+    num_of_features *= base_features * (2**(num_of_layers-1))
+    self.fc1 = nn.Linear(num_of_features, hidden_neurons)
+    self.fc2 = nn.Linear(hidden_neurons, CLASSES)
 
-  # optimal model
-  class Basic_4cnv(Basic_cnv):
-    def __init__(self, base_features, hidden_neurons, CLASSES):
-      super().__init__(4, base_features, hidden_neurons, CLASSES)
+# optimal model
+class Basic_4cnv(Basic_cnv):
+  def __init__(self, base_features, hidden_neurons, CLASSES):
+    super().__init__(4, base_features, hidden_neurons, CLASSES)
 
-    def forward(self,x):
-      out = x
-      out = self.max1(self.bn1(self.rel1(self.cnv1(out))))
-      out = self.max2(self.bn2(self.rel2(self.cnv2(out))))
-      out = self.max3(self.bn3(self.rel3(self.cnv3(out))))
-      out = self.max4(self.bn4(self.rel4(self.cnv4(out))))
-      out = self.flat(out)
-      out = self.doo(self.relo(self.fc1(out)))
-      out = self.fc2(out)
-      return out
+  def forward(self,x):
+    out = x
+    out = self.max1(self.bn1(self.rel1(self.cnv1(out))))
+    out = self.max2(self.bn2(self.rel2(self.cnv2(out))))
+    out = self.max3(self.bn3(self.rel3(self.cnv3(out))))
+    out = self.max4(self.bn4(self.rel4(self.cnv4(out))))
+    out = self.flat(out)
+    out = self.doo(self.relo(self.fc1(out)))
+    out = self.fc2(out)
+    return out
 
 """###Predicting using the trained model"""
 
@@ -244,8 +247,8 @@ def get_prediction(imgs_to_predict = [], determinism = True):
       pred_indicator = 'Ethnicity'
     CLASSES = len(CLASS_RANGES)
 
-
-    FacesModel = Basic_4cnv(base_features, hidden_neurons, CLASSES).load_from_checkpoint(FINAL_CKPT, map_location=torch.device('cpu'))
+    FacesModel = Basic_4cnv(base_features, hidden_neurons, CLASSES)
+    FacesModel = FacesModel.load_from_checkpoint(FINAL_CKPT, map_location=torch.device('cpu'), base_features=base_features, hidden_neurons=hidden_neurons, CLASSES=CLASSES)
     print(f"\nPredicting {pred_indicator} based on model")
     FacesModel.eval()
     FacesModel.freeze()
@@ -262,14 +265,12 @@ def get_prediction(imgs_to_predict = [], determinism = True):
         pred_label = f"{pred_indicator}: {pred} {pred_prob:.1f}%"
         print(f"Predicted output: {pred_label}")
         if CLASS_AGE:
-          pred_dict['a']['label'] = pred_label
+          pred_dict['a']['label'] = pred
           pred_dict['a']['prob'] = pred_prob
         elif CLASS_GENDER:
-          pred_dict['g']['label'] = pred_label
+          pred_dict['g']['label'] = pred
           pred_dict['g']['prob'] = pred_prob
         elif CLASS_ETHNICITY:
-          pred_dict['e']['label'] = pred_label
+          pred_dict['e']['label'] = pred
           pred_dict['e']['prob'] = pred_prob
   return pred_dict
-
-get_prediction(imgs_to_predict)
