@@ -16,7 +16,7 @@ pip install -r requirements.txt
 flask run
 ```
 
-Once the app is running, you can visit the <a href="https://age-class-app.webflow.io/">demo</a> and try the model out
+Once the app is running, you can visit the <a href="https://age-class-app.webflow.io/">demo</a> and try the model out. If you are in a hurry, you can view the demo video at the end of this file.
 
 ## important links
 
